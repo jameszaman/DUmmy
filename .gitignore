@@ -1,7 +1,17 @@
-# Ignoring IDE specific files.
+# IDE specific files.
 .vscode/
 .idea/
 
-# Ignoring temporary files
+# Temporary files
 temp/
 *.tmp
+
+# Enviroment specific files.
+.env
+env/
+
+# Files for running the application
+run.*
+
+# Python specific files
+__pycache__/
