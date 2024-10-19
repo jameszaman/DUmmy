@@ -1,0 +1,7 @@
+# Ignoring IDE specific files.
+.vscode/
+.idea/
+
+# Ignoring temporary files
+temp/
+*.tmp
