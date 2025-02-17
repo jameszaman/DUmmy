@@ -1,6 +1,5 @@
 import os
-
-import requests
+import httpx
 from tqdm import tqdm
 
 
@@ -59,9 +58,8 @@ class DownloadService:
         "video/x-flv": "flv",
     }
 
-
     @staticmethod
-    def download_file(url, destination_folder=None, filename=None, file_format=None):
+    async def download_file(url, destination_folder=None, filename=None, file_format=None):
         # Default to current directory if no destination folder is provided
         if destination_folder is None:
             destination_folder = os.getcwd()
@@ -76,39 +74,41 @@ class DownloadService:
 
         # If format is not provided, make a HEAD request to get the content type
         if file_format is None:
-            head_response = requests.head(url)
-            content_type = head_response.headers.get('Content-Type', '')
-            if content_type:
-                # Determine file extension from content type
-                file_format = content_type.split('/')[-1]
-                # In case there are qs scores, remove those.
-                file_format = file_format.split(";")[0]
-                # If the content type is not in the dictionary, use the content type as the file format
-                file_format = DownloadService.__content_type_to_file_format.get(content_type, file_format)
-                # Add the file format to the filename if not already present
-                if not filename.endswith(file_format):
-                    filename += f'.{file_format}'
-            else:
-                print("Warning: Could not determine file format from content type. Using URL to determine file extension.")
-                # If content type is not provided, use the URL to determine the file extension
-                filename += os.path.splitext(url)[-1]
+            async with httpx.AsyncClient() as client:
+                head_response = await client.head(url)
+                content_type = head_response.headers.get('Content-Type', '')
+                if content_type:
+                    # Determine file extension from content type
+                    file_format = content_type.split('/')[-1]
+                    # In case there are qs scores, remove those.
+                    file_format = file_format.split(";")[0]
+                    # If the content type is not in the dictionary, use the content type as the file format
+                    file_format = DownloadService.__content_type_to_file_format.get(content_type, file_format)
+                    # Add the file format to the filename if not already present
+                    if not filename.endswith(file_format):
+                        filename += f'.{file_format}'
+                else:
+                    print("Warning: Could not determine file format from content type. Using URL to determine file extension.")
+                    # If content type is not provided, use the URL to determine the file extension
+                    filename += os.path.splitext(url)[-1]
 
         # Full path for the file to be saved
         file_path = os.path.join(destination_folder, filename)
 
         # Stream the download and show progress
-        response = requests.get(url, stream=True)
-        total_size = int(response.headers.get('content-length', 0))
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, stream=True)
+            total_size = int(response.headers.get('content-length', 0))
 
-        with open(file_path, 'wb') as file, tqdm(
-            desc=filename,
-            total=total_size,
-            unit='iB',
-            unit_scale=True,
-            unit_divisor=1024,
-        ) as bar:
-            for data in response.iter_content(chunk_size=1024):
-                bar.update(len(data))
-                file.write(data)
+            with open(file_path, 'wb') as file, tqdm(
+                desc=filename,
+                total=total_size,
+                unit='iB',
+                unit_scale=True,
+                unit_divisor=1024,
+            ) as bar:
+                async for data in response.aiter_bytes(chunk_size=1024):
+                    bar.update(len(data))
+                    file.write(data)
 
         print(f"File downloaded: {file_path}")
