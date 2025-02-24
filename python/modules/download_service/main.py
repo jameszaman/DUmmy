@@ -97,18 +97,19 @@ class DownloadService:
 
         # Stream the download and show progress
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, stream=True)
-            total_size = int(response.headers.get('content-length', 0))
+            # Use the correct stream method here
+            async with client.stream("GET", url) as response:
+                total_size = int(response.headers.get('content-length', 0))
 
-            with open(file_path, 'wb') as file, tqdm(
-                desc=filename,
-                total=total_size,
-                unit='iB',
-                unit_scale=True,
-                unit_divisor=1024,
-            ) as bar:
-                async for data in response.aiter_bytes(chunk_size=1024):
-                    bar.update(len(data))
-                    file.write(data)
+                with open(file_path, 'wb') as file, tqdm(
+                    desc=filename,
+                    total=total_size,
+                    unit='iB',
+                    unit_scale=True,
+                    unit_divisor=1024,
+                ) as bar:
+                    async for data in response.aiter_bytes(chunk_size=1024):
+                        bar.update(len(data))
+                        file.write(data)
 
         print(f"File downloaded: {file_path}")
