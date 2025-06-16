@@ -59,7 +59,7 @@ class DownloadService:
     }
 
     @staticmethod
-    async def download_file(url, destination_folder=None, filename=None, file_format=None):
+    async def download_file(url, destination_folder=None, filename=None, file_format=None, ignore_completed=True, redownload_broken=True):
         # Default to current directory if no destination folder is provided
         if destination_folder is None:
             destination_folder = os.getcwd()
@@ -72,28 +72,50 @@ class DownloadService:
             # Extract filename from URL
             filename = url.split("/")[-1]
 
-        # If format is not provided, make a HEAD request to get the content type
+        # A HEAD request to get basic information about the file.
+        # This is will be used in multiple places, so we do it here.
+        async with httpx.AsyncClient() as client:
+            head_response = await client.head(url)
+
+        # If format is not provided, use head request data to get the content type
         if file_format is None:
-            async with httpx.AsyncClient() as client:
-                head_response = await client.head(url)
-                content_type = head_response.headers.get('Content-Type', '')
-                if content_type:
-                    # Determine file extension from content type
-                    file_format = content_type.split('/')[-1]
-                    # In case there are qs scores, remove those.
-                    file_format = file_format.split(";")[0]
-                    # If the content type is not in the dictionary, use the content type as the file format
-                    file_format = DownloadService.__content_type_to_file_format.get(content_type, file_format)
-                    # Add the file format to the filename if not already present
-                    if not filename.endswith(file_format):
-                        filename += f'.{file_format}'
-                else:
-                    print("Warning: Could not determine file format from content type. Using URL to determine file extension.")
-                    # If content type is not provided, use the URL to determine the file extension
-                    filename += os.path.splitext(url)[-1]
+            content_type = head_response.headers.get('Content-Type', '')
+            if content_type:
+                # Determine file extension from content type
+                file_format = content_type.split('/')[-1]
+                # In case there are qs scores, remove those.
+                file_format = file_format.split(";")[0]
+                # If the content type is not in the dictionary, use the content type as the file format
+                file_format = DownloadService.__content_type_to_file_format.get(content_type, file_format)
+                # Add the file format to the filename if not already present
+                if not filename.endswith(file_format):
+                    filename += f'.{file_format}'
+            else:
+                print("Warning: Could not determine file format from content type. Using URL to determine file extension.")
+                # If content type is not provided, use the URL to determine the file extension
+                filename += os.path.splitext(url)[-1]
 
         # Full path for the file to be saved
         file_path = os.path.join(destination_folder, filename)
+
+        # First check if the file already exists. If it exists, check the size of the file.
+        # If the size does not match the size of the file and redownload_broken is True, then we will redownload the file.
+        # If the size does match and ignore_completed is True, then we will skip the download.
+        if os.path.exists(file_path):
+            existing_file_size = os.path.getsize(file_path)
+            total_size = int(head_response.headers.get('Content-Length', 0))
+
+            if existing_file_size == total_size:
+                if ignore_completed:
+                    print(f"File Exists - Skipping - : {file_path}")
+                    return file_path
+                else:
+                    print(f"File Exists - Re-downloading - : {file_path}")
+            elif redownload_broken:
+                print(f"File Exists - Size Mismatch - Re-downloading - : {file_path}")
+            else:
+                print(f"File Exists - Size Mismatch - Skipping - : {file_path}")
+                return file_path
 
         # Stream the download and show progress
         async with httpx.AsyncClient() as client:
