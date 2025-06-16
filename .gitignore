@@ -5,8 +5,9 @@
 # Temporary files
 temp/
 *.tmp
+downloads/
 
-# Enviroment specific files.
+# Environment specific files.
 .env
 env/
 
@@ -15,3 +16,6 @@ run.*
 
 # Python specific files
 __pycache__/
+
+# Mac specific files
+.DS_Store
